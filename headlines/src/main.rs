@@ -1,14 +1,20 @@
 mod headlines;
 use crate::headlines::{Headlines, PADDING};
-use eframe::egui::{self, Hyperlink, Label, RichText, TopBottomPanel, Ui};
+use eframe::egui::{self, Hyperlink, Label, RichText, TopBottomPanel, Ui, Visuals};
 use eframe::{
     egui::{CentralPanel, ScrollArea, Separator, Vec2},
     App,
 };
 
 impl App for Headlines {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.render_top_panel(ctx);
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if self.config.dark_mode {
+            ctx.set_visuals(Visuals::dark());
+        } else {
+            ctx.set_visuals(Visuals::light());
+        }
+
+        self.render_top_panel(ctx, frame);
         CentralPanel::default().show(ctx, |ui| {
             render_header(ui);
             ScrollArea::both().show(ui, |ui| {
