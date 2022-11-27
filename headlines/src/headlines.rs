@@ -1,28 +1,35 @@
-use eframe::egui::{self, Button, TopBottomPanel};
+use eframe::egui::{self, Button, TopBottomPanel, Window};
 use eframe::egui::{
     Align, Color32, FontData, FontDefinitions, FontFamily, Hyperlink, Label, Layout, RichText,
     Separator,
 };
 use std::iter::FromIterator;
+use serde::{Serialize, Deserialize};
+use confy;
+
 
 pub const PADDING: f32 = 5.0;
 const WHITE: Color32 = Color32::from_rgb(255, 255, 255);
 const CYAN: Color32 = Color32::from_rgb(0, 255, 255);
 const BLACK: Color32 = Color32::from_rgb(0, 0, 0);
 const RED: Color32 = Color32::from_rgb(255, 0, 0);
+
+#[derive(Serialize, Deserialize)]
 pub struct HeadlinesConfig {
     pub dark_mode: bool,
+    pub api_key: String
 }
 
-impl HeadlinesConfig {
-    fn new() -> Self {
-        Self { dark_mode: true }
+impl Default for HeadlinesConfig {
+    fn default() -> Self {
+        Self { dark_mode: Default::default(), api_key: String::new() }
     }
 }
 
 pub struct Headlines {
     articles: Vec<NewsCardData>,
     pub config: HeadlinesConfig,
+    pub api_key_initialized : bool
 }
 
 struct NewsCardData {
@@ -39,9 +46,12 @@ impl Headlines {
             url: format!("https://example.com/{}", a),
         });
 
+        let config : HeadlinesConfig = confy::load("headlines", None).unwrap_or_default();
+
         Headlines {
             articles: Vec::from_iter(iter),
-            config: HeadlinesConfig::new(),
+            config,
+            api_key_initialized: false
         }
     }
 
@@ -124,4 +134,27 @@ impl Headlines {
             ui.add_space(10.);
         });
     }
+
+    pub fn render_config(&mut self, ctx: &egui::Context){
+        Window::new("Configuration").show(ctx, |ui| {
+            ui.label("Enter your API KEY for newsapi.org");
+            let text_input = ui.text_edit_singleline(&mut self.config.api_key);
+            if text_input.lost_focus() && ui.input().key_pressed(egui::Key::Enter){
+                if let Err(e) = confy::store("headlines","headlines",  HeadlinesConfig {
+                    dark_mode: self.config.dark_mode,
+                    api_key: self.config.api_key.to_string()
+                }){
+                    tracing::error!("Failed saving app store: {}", e);
+                }
+
+                self.api_key_initialized = true;
+
+                tracing::error!("api key set");
+            }
+            tracing::error!("{}", &self.config.api_key);
+            ui.label("If you havn't registered forr the API_KEY, head over to");
+            ui.hyperlink("https://newsapi.org");
+        });
+    }
+
 }
