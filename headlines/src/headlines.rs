@@ -3,7 +3,7 @@ use eframe::egui::{
     Align, Color32, FontData, FontDefinitions, FontFamily, Hyperlink, Label, Layout, RichText,
     Separator,
 };
-use std::iter::FromIterator;
+
 use serde::{Serialize, Deserialize};
 use confy;
 
@@ -14,7 +14,7 @@ const CYAN: Color32 = Color32::from_rgb(0, 255, 255);
 const BLACK: Color32 = Color32::from_rgb(0, 0, 0);
 const RED: Color32 = Color32::from_rgb(255, 0, 0);
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct HeadlinesConfig {
     pub dark_mode: bool,
     pub api_key: String
@@ -27,31 +27,27 @@ impl Default for HeadlinesConfig {
 }
 
 pub struct Headlines {
-    articles: Vec<NewsCardData>,
+    pub articles: Vec<NewsCardData>,
     pub config: HeadlinesConfig,
-    pub api_key_initialized : bool
+    pub api_key_initialized : bool,
+    pub data_is_set: bool
 }
 
-struct NewsCardData {
-    title: String,
-    desc: String,
-    url: String,
+#[derive(Debug)]
+pub struct NewsCardData {
+    pub title: String,
+    pub desc: String,
+    pub url: String,
 }
 
 impl Headlines {
     pub fn new() -> Headlines {
-        let iter = (0..20).map(|a| NewsCardData {
-            title: format!("title{}", a),
-            desc: format!("desc{}", a),
-            url: format!("https://example.com/{}", a),
-        });
-
-        let config : HeadlinesConfig = confy::load("headlines", None).unwrap_or_default();
-
+        let config : HeadlinesConfig = confy::load("headlines", "headlines").unwrap_or_default();
         Headlines {
-            articles: Vec::from_iter(iter),
+            api_key_initialized: !config.api_key.is_empty(),
+            articles: vec![],
             config,
-            api_key_initialized: false
+            data_is_set : false
         }
     }
 
@@ -149,7 +145,6 @@ impl Headlines {
 
                 self.api_key_initialized = true;
 
-                tracing::error!("api key set");
             }
             tracing::error!("{}", &self.config.api_key);
             ui.label("If you havn't registered forr the API_KEY, head over to");

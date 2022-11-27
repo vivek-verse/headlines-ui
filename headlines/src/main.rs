@@ -1,11 +1,27 @@
 mod headlines;
-use crate::headlines::{Headlines, PADDING};
+use crate::headlines::{Headlines, PADDING, NewsCardData};
 use eframe::egui::{self, Hyperlink, Label, RichText, TopBottomPanel, Ui, Visuals};
 use eframe::{
     egui::{CentralPanel, ScrollArea, Separator, Vec2},
     App,
 };
+use newslib::NewsAPI;
 use tracing_subscriber;
+
+fn fetch_news(api_key : &str, articles : &mut Vec<NewsCardData>){
+   if let Ok(response) = NewsAPI::new(api_key).fetch(){
+    let resp_articles = response.articles();
+    for a in resp_articles.iter(){
+        let news = NewsCardData {
+            title : a.title().to_string(),
+            url: a.url().to_string(),
+            desc: a.desc().map(|s| s.to_string()).unwrap_or("...".to_string())
+        };
+        articles.push(news);
+    }
+   }
+}
+
 impl App for Headlines {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if self.config.dark_mode {
@@ -14,6 +30,10 @@ impl App for Headlines {
             ctx.set_visuals(Visuals::light());
         }
 
+        if !self.data_is_set && !self.config.api_key.is_empty(){
+            fetch_news(&self.config.api_key, &mut self.articles);
+            self.data_is_set = true;
+        }
 
         if !self.api_key_initialized {
             self.render_config(ctx);            
