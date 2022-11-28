@@ -1,3 +1,5 @@
+use std::sync::mpsc::Receiver;
+
 use eframe::egui::{self, Button, TopBottomPanel, Window};
 use eframe::egui::{
     Align, Color32, FontData, FontDefinitions, FontFamily, Hyperlink, Label, Layout, RichText,
@@ -30,7 +32,8 @@ pub struct Headlines {
     pub articles: Vec<NewsCardData>,
     pub config: HeadlinesConfig,
     pub api_key_initialized : bool,
-    pub data_is_set: bool
+    pub data_is_set: bool,
+    pub news_rx: Option<Receiver<NewsCardData>>
 }
 
 #[derive(Debug)]
@@ -47,6 +50,7 @@ impl Headlines {
             api_key_initialized: !config.api_key.is_empty(),
             articles: vec![],
             config,
+            news_rx : None,
             data_is_set : false
         }
     }
@@ -67,7 +71,7 @@ impl Headlines {
 
     pub fn render_news_cards(&self, ui: &mut eframe::egui::Ui) {
         for a in &self.articles {
-            // ui.add_space(PADDING);
+            ui.add_space(PADDING);
             let title = format!("▶ {}", a.title);
 
             if self.config.dark_mode {
@@ -150,6 +154,20 @@ impl Headlines {
             ui.label("If you havn't registered forr the API_KEY, head over to");
             ui.hyperlink("https://newsapi.org");
         });
+    }
+
+    pub fn preload_articles(&mut self){
+        if let Some(rx) = &self.news_rx {
+            match rx.try_recv(){
+                Ok(news_data) => {
+                    self.articles.push(news_data);
+                },
+                Err(e) => {
+                    self.news_rx = None;
+                    tracing::warn!("Error receiving msg: {}", e)
+                }
+            }
+        }
     }
 
 }

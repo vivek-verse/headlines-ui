@@ -1,4 +1,6 @@
 mod headlines;
+use std::{sync::mpsc::channel, thread};
+
 use crate::headlines::{Headlines, PADDING, NewsCardData};
 use eframe::egui::{self, Hyperlink, Label, RichText, TopBottomPanel, Ui, Visuals};
 use eframe::{
@@ -8,31 +10,49 @@ use eframe::{
 use newslib::NewsAPI;
 use tracing_subscriber;
 
-fn fetch_news(api_key : &str, articles : &mut Vec<NewsCardData>){
-   if let Ok(response) = NewsAPI::new(api_key).fetch(){
-    let resp_articles = response.articles();
-    for a in resp_articles.iter(){
-        let news = NewsCardData {
-            title : a.title().to_string(),
-            url: a.url().to_string(),
-            desc: a.desc().map(|s| s.to_string()).unwrap_or("...".to_string())
-        };
-        articles.push(news);
-    }
-   }
-}
-
 impl App for Headlines {
+
+    fn post_rendering(&mut self, _window_size_px: [u32; 2], _frame: &eframe::Frame) {
+        if !self.data_is_set && !self.config.api_key.is_empty(){
+
+            let api_key = &self.config.api_key;
+            
+            let api_key = api_key.to_string();
+
+            let (news_tx, news_rx) = channel();
+
+            self.news_rx = Some(news_rx);
+        
+            let response = NewsAPI::new(&api_key).fetch().unwrap();
+            
+            thread::spawn(move ||{
+                    let resp_articles = response.articles();
+                    for a in resp_articles.iter(){
+                        let news = NewsCardData {
+                            title : a.title().to_string(),
+                            url: a.url().to_string(),
+                            desc: a.desc().map(|s| s.to_string()).unwrap_or("...".to_string())
+                        };
+        
+                        if let Err(e) = news_tx.send(news){
+                            tracing::error!("Error sending news data: {}", e);
+                        }
+                    }
+            });
+            self.data_is_set = true;
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        ctx.request_repaint();
         if self.config.dark_mode {
             ctx.set_visuals(Visuals::dark());
         } else {
             ctx.set_visuals(Visuals::light());
         }
 
-        if !self.data_is_set && !self.config.api_key.is_empty(){
-            fetch_news(&self.config.api_key, &mut self.articles);
-            self.data_is_set = true;
+        if self.news_rx.is_some() {
+            self.preload_articles();
         }
 
         if !self.api_key_initialized {
