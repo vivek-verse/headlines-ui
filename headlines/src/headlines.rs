@@ -1,5 +1,5 @@
 use std::sync::mpsc::Receiver;
-
+use std::{sync::mpsc::channel, thread};
 use eframe::egui::{self, Button, TopBottomPanel, Window};
 use eframe::egui::{
     Align, Color32, FontData, FontDefinitions, FontFamily, Hyperlink, Label, Layout, RichText,
@@ -8,7 +8,7 @@ use eframe::egui::{
 
 use serde::{Serialize, Deserialize};
 use confy;
-
+use newslib::NewsAPI;
 
 pub const PADDING: f32 = 5.0;
 const WHITE: Color32 = Color32::from_rgb(255, 255, 255);
@@ -116,6 +116,11 @@ impl Headlines {
                         frame.close();
                     }
                     let refresh_btn = ui.add(Button::new("🔄"));
+                    
+                    if refresh_btn.clicked() {
+                        self.refresh_data();
+                    }
+
                     let theme_btn = ui.add(Button::new({
                         if self.config.dark_mode {
                             "🌞"
@@ -154,6 +159,43 @@ impl Headlines {
             ui.label("If you havn't registered forr the API_KEY, head over to");
             ui.hyperlink("https://newsapi.org");
         });
+    }
+
+    pub fn load_data(&mut self){
+        if !self.data_is_set && !self.config.api_key.is_empty() && self.config.api_key.len() == 32 {
+
+            let api_key = &self.config.api_key;
+            
+            let api_key = api_key.to_string();
+
+            let (news_tx, news_rx) = channel();
+
+            self.news_rx = Some(news_rx);
+        
+            let response = NewsAPI::new(&api_key).fetch().expect("Failed to load articles");
+            
+            thread::spawn(move ||{
+                    let resp_articles = response.articles();
+                    for a in resp_articles.iter(){
+                        let news = NewsCardData {
+                            title : a.title().to_string(),
+                            url: a.url().to_string(),
+                            desc: a.desc().map(|s| s.to_string()).unwrap_or("...".to_string())
+                        };
+        
+                        if let Err(e) = news_tx.send(news){
+                            tracing::error!("Error sending news data: {}", e);
+                        }
+                    }
+            });
+            self.data_is_set = true;
+        }
+    }
+
+    pub fn refresh_data(&mut self){
+        self.data_is_set = false;
+        self.articles = vec![];
+        self.load_data();
     }
 
     pub fn preload_articles(&mut self){
